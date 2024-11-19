@@ -28,7 +28,7 @@ A NestJS-based currency conversion microservice that provides real-time exchange
 ## Installation
 
 ```bash
-git clone https://github.com/pedrobits/meupequenodollar.git
+git clone https://github.com/pedrobits/myLittleDollar.git
 cd meupequenodollar
 npm install
 ```
