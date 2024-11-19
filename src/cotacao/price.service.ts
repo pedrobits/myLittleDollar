@@ -1,48 +1,60 @@
-import { HttpException, HttpStatus, Injectable, NotAcceptableException } from "@nestjs/common";
+import { HttpException, HttpStatus, Inject, Injectable, NotAcceptableException } from "@nestjs/common";
 import { HttpService } from '@nestjs/axios';
 import { currencyPairs } from "../constants/currency";
 import { currencySymbols } from "../constants/currencySymbol";
 import { lastValueFrom } from "rxjs";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class CotacaoService {
-	constructor(private readonly httpService: HttpService) { }
+	constructor(private readonly httpService: HttpService, @Inject(CACHE_MANAGER) private cacheManager: Cache) { }
 
-	async convertValueTo(baseCurrency: string, targetCurrency: string, amount: number): Promise<any> {
+	async convertValueTo(baseCurrency: string, targetCurrency: string, value: number): Promise<any> {
 		try {
+			const cacheKey = `currency_${baseCurrency}_${targetCurrency}`;
+			const cachedData = await this.cacheManager.get(cacheKey) as any;
+			if (cachedData) { return cachedData };
+
 			const currencyPair = await this.isCurrencyPairValid(baseCurrency, targetCurrency);
 			if (!currencyPair) {
 				throw new Error(`Currency pair not found: ${baseCurrency}-${targetCurrency}`);
 			}
 
-			const convertValueToNewCurrency = await this.fetchCurrencyConvertedValue(currencyPair);
+			const currencyConversionData = await this.fetchCurrencyConvertedValue(currencyPair);
 
-			const actualPair = Object.keys(convertValueToNewCurrency)[0];
-			const isReversed = actualPair !== `${baseCurrency}${targetCurrency}`;
+			const actualPair = Object.keys(currencyConversionData)[0];
+			const isReversePair = actualPair !== `${baseCurrency}${targetCurrency}`;
 
 			const exchangeRate = parseFloat(
-				isReversed
-					? convertValueToNewCurrency[actualPair]?.ask
-					: convertValueToNewCurrency[actualPair]?.bid
+				isReversePair
+					? currencyConversionData[actualPair]?.ask
+					: currencyConversionData[actualPair]?.bid
 			);
 
 			if (!exchangeRate) {
 				throw new Error(`Exchange rate not found for ${currencyPair}`);
 			}
-			return {
+
+			const formattedDate = this.getFormattedDate(currencyConversionData[actualPair].create_date);
+
+			const cacheData = {
 				[`${baseCurrency}Entry`]: {
 					currencySymbol: currencySymbols[baseCurrency],
-					Value: amount,
+					Value: value,
 				},
 				convertedValue: {
 					CurrencySymbol: currencySymbols[targetCurrency],
-					Value: isReversed
-						? amount / exchangeRate
-						: amount * exchangeRate,
+					Value: isReversePair
+						? value / exchangeRate
+						: value * exchangeRate,
 				},
-				date: this.getFormattedDate(convertValueToNewCurrency[actualPair].create_date),
-				exchangeRate: `${exchangeRate.toFixed(2)}%`,
+				date: formattedDate,
+				exchangeRate: `${exchangeRate}`,
 			};
+
+			await this.cacheManager.set(cacheKey, cacheData, 3600000);
+			return cacheData;
 		} catch (error) {
 			console.error(`Erro ao buscar cotação ${baseCurrency}-${targetCurrency}:`, error.message);
 			throw new NotAcceptableException(`Falha ao obter a cotação ${baseCurrency}-${targetCurrency}.`);
@@ -84,5 +96,9 @@ export class CotacaoService {
 				HttpStatus.SERVICE_UNAVAILABLE
 			);
 		}
+	}
+
+	async getCurrencyPairPossibilities(): Promise<string[]> {
+		return currencyPairs;
 	}
 }

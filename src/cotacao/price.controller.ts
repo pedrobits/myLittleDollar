@@ -1,14 +1,19 @@
-import { BadRequestException, Body, Controller, Param, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { CotacaoService } from './price.service';
 import { ConvertValueDto } from "./dto/converteValueDto";
 
-@Controller()
+@Controller('currency')
 export class cotacaoController {
 	constructor(private readonly cotacaoService: CotacaoService) { }
 
 	@Post('convert')
 	convertValueTo(@Body() convertValueDto: ConvertValueDto) {
-	  const { baseCurrency, targetCurrency, amount } = convertValueDto;
-	  return this.cotacaoService.convertValueTo(baseCurrency, targetCurrency, amount);
+	  const { baseCurrency, targetCurrency, value } = convertValueDto;
+	  return this.cotacaoService.convertValueTo(baseCurrency, targetCurrency, value);
+	}
+
+	@Get('possibilities')
+	getCurrencyPairPossibilities() {
+	  return this.cotacaoService.getCurrencyPairPossibilities();
 	}
 }
