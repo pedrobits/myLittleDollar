@@ -11,5 +11,5 @@ export class ConvertValueDto {
 
   @IsNumber()
   @IsPositive()
-  amount: number;
+  value: number;
 }
